@@ -1,15 +1,118 @@
 classDiagram
-    %% Replace the placeholders below with your actual classes, attributes, methods, and relationships.
-    %% Keep this file updated so it matches your final implementation.
+    %% PawPal+ initial design
+    %% Owner owns many pets. Each pet has flexible care tasks (walk/feed/meds)
+    %% and fixed appointments (grooming/check-ups). The Scheduler builds ONE
+    %% daily plan across all of an owner's pets so two pets never overlap.
 
-    class ClassName {
-        +type attribute
-        +method() returnType
+    class Owner {
+        +str name
+        +list~Pet~ pets
+        +list~TimeWindow~ available_windows
+        +add_pet(pet) None
+        +all_items() list~CareItem~
+        +total_available_minutes() int
     }
 
-    class AnotherClass {
-        +type attribute
-        +method() returnType
+    class Pet {
+        +str name
+        +str species
+        +list~CareTask~ tasks
+        +list~Appointment~ appointments
+        +add_task(task) None
+        +add_appointment(appt) None
+        +items() list~CareItem~
     }
 
-    ClassName --> AnotherClass : relationship
+    class CareItem {
+        <<abstract>>
+        +str title
+        +int duration_minutes
+        +Priority priority
+        +is_fixed() bool
+        +earliest_start() time
+    }
+
+    class CareTask {
+        +TimeOfDay preferred_time
+        +bool recurring_daily
+        +is_fixed() bool
+        +fits_in(window) bool
+    }
+
+    class Appointment {
+        +time start_time
+        +str location
+        +is_fixed() bool
+        +to_window() TimeWindow
+    }
+
+    class TimeWindow {
+        +time start
+        +time end
+        +minutes() int
+        +overlaps(other) bool
+        +contains(start, duration) bool
+    }
+
+    class ScheduledItem {
+        +Pet pet
+        +CareItem item
+        +time start
+        +time end
+        +str reason
+        +conflicts_with(other) bool
+    }
+
+    class DailySchedule {
+        +date day
+        +list~ScheduledItem~ entries
+        +list~CareItem~ skipped
+        +add(entry) bool
+        +has_conflict(entry) bool
+        +minutes_used() int
+        +explain() str
+    }
+
+    class Scheduler {
+        +Owner owner
+        +list~TimeWindow~ windows
+        +build_day(day) DailySchedule
+        +place_appointments(schedule) None
+        +place_tasks(schedule) None
+        +sort_by_priority(items) list~CareItem~
+        +next_free_slot(duration, window) time
+    }
+
+    class Priority {
+        <<enumeration>>
+        HIGH
+        MEDIUM
+        LOW
+        +rank() int
+    }
+
+    class TimeOfDay {
+        <<enumeration>>
+        MORNING
+        AFTERNOON
+        EVENING
+        ANY
+    }
+
+    CareItem <|-- CareTask
+    CareItem <|-- Appointment
+
+    Owner "1" *-- "many" Pet : owns
+    Pet "1" *-- "many" CareTask : needs
+    Pet "1" *-- "many" Appointment : books
+    Owner "1" o-- "many" TimeWindow : available
+
+    Scheduler "1" --> "1" Owner : plans for
+    Scheduler "1" --> "1" DailySchedule : produces
+    DailySchedule "1" *-- "many" ScheduledItem : entries
+    ScheduledItem "1" --> "1" CareItem : schedules
+    ScheduledItem "1" --> "1" Pet : for
+
+    CareItem --> Priority : ranked by
+    CareTask --> TimeOfDay : prefers
+    Appointment --> TimeWindow : occupies
