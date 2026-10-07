@@ -18,7 +18,7 @@ class Priority(Enum):
 
     def rank(self) -> int:
         """Sortable number for this priority (lower sorts first)."""
-        raise NotImplementedError
+        return {"high": 0, "medium": 1, "low": 2}[self.value]
 
 
 class TimeOfDay(Enum):
@@ -57,6 +57,11 @@ class CareItem:
     title: str
     duration_minutes: int
     priority: Priority = Priority.MEDIUM
+    completed: bool = False
+
+    def mark_complete(self) -> None:
+        """Record that this item has been taken care of today."""
+        self.completed = True
 
     def is_fixed(self) -> bool:
         """True if the start time cannot be moved by the scheduler."""
@@ -75,7 +80,8 @@ class CareTask(CareItem):
     recurring_daily: bool = True
 
     def is_fixed(self) -> bool:
-        raise NotImplementedError
+        """False -- the scheduler is free to move a care task around the day."""
+        return False
 
     def fits_in(self, window: TimeWindow) -> bool:
         """True if this task could be placed somewhere in `window`."""
@@ -90,6 +96,7 @@ class Appointment(CareItem):
     location: str = ""
 
     def is_fixed(self) -> bool:
+        """True -- an appointment is booked, so its start time cannot move."""
         raise NotImplementedError
 
     def to_window(self) -> TimeWindow:
@@ -108,15 +115,15 @@ class Pet:
 
     def add_task(self, task: CareTask) -> None:
         """Attach a flexible care task to this pet."""
-        raise NotImplementedError
+        self.tasks.append(task)
 
     def add_appointment(self, appointment: Appointment) -> None:
         """Attach a fixed-time appointment to this pet."""
-        raise NotImplementedError
+        self.appointments.append(appointment)
 
     def items(self) -> list[CareItem]:
         """All tasks and appointments for this pet, in one list."""
-        raise NotImplementedError
+        return [*self.tasks, *self.appointments]
 
 
 @dataclass
@@ -129,11 +136,11 @@ class Owner:
 
     def add_pet(self, pet: Pet) -> None:
         """Register a pet with this owner."""
-        raise NotImplementedError
+        self.pets.append(pet)
 
     def all_items(self) -> list[CareItem]:
         """Every care item across every pet this owner has."""
-        raise NotImplementedError
+        return [item for pet in self.pets for item in pet.items()]
 
     def total_available_minutes(self) -> int:
         """Sum of all available windows, the hard cap on what can be scheduled."""
