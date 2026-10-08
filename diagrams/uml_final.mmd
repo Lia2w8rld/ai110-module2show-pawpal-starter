@@ -1,0 +1,163 @@
+classDiagram
+    %% PawPal+ final design -- mirrors pawpal_system.py.
+    %% Owner owns many Pets; each Pet owns many CareTasks. The Scheduler reads
+    %% (Pet, CareTask) pairs across ALL of the owner's pets via
+    %% Owner.tasks_with_pets() to sort, filter, and detect conflicts.
+    %%
+    %% Type notes (Mermaid generics cannot contain commas):
+    %%   list~tuple~      = list[tuple[Pet, CareTask]]
+    %%   dict (detect_conflicts) = dict[time, list[tuple[Pet, CareTask]]]
+    %%   Optional~X~      = X | None
+    %%
+    %% Methods marked "stub" below are declared in pawpal_system.py but still
+    %% raise NotImplementedError; they are kept so the diagram matches the file.
+
+    class Owner {
+        +str name
+        +list~Pet~ pets
+        +list~TimeWindow~ available_windows
+        +add_pet(pet) None
+        +all_items() list~CareItem~
+        +tasks_with_pets() list~tuple~
+        +total_available_minutes() int
+    }
+    %% stub: Owner.total_available_minutes
+
+    class Pet {
+        +str name
+        +str species
+        +list~CareTask~ tasks
+        +list~Appointment~ appointments
+        +add_task(task) None
+        +add_appointment(appointment) None
+        +complete_task(task, today) Optional~CareTask~
+        +items() list~CareItem~
+    }
+
+    class CareItem {
+        +str title
+        +int duration_minutes
+        +Priority priority
+        +bool completed
+        +mark_complete() None
+        +is_fixed() bool
+        +earliest_start() Optional~time~
+    }
+    %% stubs: CareItem.is_fixed, CareItem.earliest_start
+
+    class CareTask {
+        +TimeOfDay preferred_time
+        +Frequency frequency
+        +Optional~time~ scheduled_time
+        +Optional~date~ due_date
+        +is_fixed() bool
+        +next_occurrence(today) Optional~CareTask~
+        +fits_in(window) bool
+    }
+    %% stub: CareTask.fits_in
+
+    class Appointment {
+        +Optional~time~ start_time
+        +str location
+        +is_fixed() bool
+        +to_window() TimeWindow
+    }
+    %% stubs: Appointment.is_fixed, Appointment.to_window
+
+    class TimeWindow {
+        +time start
+        +time end
+        +minutes() int
+        +overlaps(other) bool
+        +contains(start, duration_minutes) bool
+    }
+    %% stubs: all TimeWindow methods
+
+    class ScheduledItem {
+        +Pet pet
+        +CareItem item
+        +time start
+        +time end
+        +str reason
+        +conflicts_with(other) bool
+    }
+    %% stub: ScheduledItem.conflicts_with
+
+    class DailySchedule {
+        +date day
+        +list~ScheduledItem~ entries
+        +list~CareItem~ skipped
+        +add(entry) bool
+        +has_conflict(entry) bool
+        +minutes_used() int
+        +explain() str
+    }
+    %% stubs: all DailySchedule methods
+
+    class Scheduler {
+        +Owner owner
+        +list~TimeWindow~ windows
+        +sort_by_time(pairs) list~tuple~
+        +filter_tasks(pet_name, completed) list~tuple~
+        +detect_conflicts(pairs) dict
+        +build_day(day) DailySchedule
+        +place_appointments(schedule) None
+        +place_tasks(schedule) None
+        +sort_by_priority(items) list~CareItem~
+        +next_free_slot(duration_minutes, window) Optional~time~
+    }
+    %% Implemented: sort_by_time, filter_tasks, detect_conflicts.
+    %% stubs: build_day, place_appointments, place_tasks, sort_by_priority,
+    %%        next_free_slot
+
+    class Priority {
+        <<enumeration>>
+        HIGH
+        MEDIUM
+        LOW
+        +rank() int
+    }
+
+    class TimeOfDay {
+        <<enumeration>>
+        MORNING
+        AFTERNOON
+        EVENING
+        ANY
+    }
+
+    class Frequency {
+        <<enumeration>>
+        ONCE
+        DAILY
+        WEEKLY
+    }
+
+    %% Inheritance
+    CareItem <|-- CareTask
+    CareItem <|-- Appointment
+
+    %% Ownership
+    Owner "1" *-- "0..*" Pet : owns
+    Pet "1" *-- "0..*" CareTask : tasks
+    Pet "1" *-- "0..*" Appointment : appointments
+    Owner "1" o-- "0..*" TimeWindow : available_windows
+
+    %% Scheduler works across every pet's tasks through its Owner
+    Scheduler "1" --> "1" Owner : owner
+    Scheduler "1" o-- "0..*" TimeWindow : windows
+    Scheduler ..> Pet : reads pairs
+    Scheduler ..> CareTask : sorts / filters / detects conflicts
+    Scheduler ..> DailySchedule : build_day returns
+
+    %% Daily plan structure
+    DailySchedule "1" *-- "0..*" ScheduledItem : entries
+    DailySchedule "1" o-- "0..*" CareItem : skipped
+    ScheduledItem "1" --> "1" Pet : pet
+    ScheduledItem "1" --> "1" CareItem : item
+
+    %% Enum usage
+    CareItem --> Priority : priority
+    CareTask --> TimeOfDay : preferred_time
+    CareTask --> Frequency : frequency
+    Appointment ..> TimeWindow : to_window

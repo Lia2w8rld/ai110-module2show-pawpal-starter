@@ -1,7 +1,9 @@
-from datetime import date
+from datetime import time
 
 import streamlit as st
+
 from pawpal_system import CareTask, Owner, Pet, Priority, Scheduler
+
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
@@ -74,13 +76,32 @@ st.markdown("### Tasks")
 if owner.pets:
     with st.form("add_task", clear_on_submit=True):
         chosen_name = st.selectbox("For pet", [p.name for p in owner.pets])
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
+
         with col1:
             task_title = st.text_input("Task title", value="Morning walk")
+
         with col2:
-            duration = st.number_input("Duration (minutes)", min_value=1, max_value=240, value=20)
+            duration = st.number_input(
+                "Duration (minutes)",
+                min_value=1,
+                max_value=240,
+                value=20,
+            )
+
         with col3:
-            priority = st.selectbox("Priority", ["low", "medium", "high"], index=2)
+            priority = st.selectbox(
+                "Priority",
+                ["low", "medium", "high"],
+                index=2,
+            )
+
+        with col4:
+            scheduled_time = st.time_input(
+                "Scheduled time",
+                value=time(8, 0),
+            )
+
         if st.form_submit_button("Add task"):
             pet = next(p for p in owner.pets if p.name == chosen_name)
             pet.add_task(
@@ -88,6 +109,7 @@ if owner.pets:
                     title=task_title,
                     duration_minutes=int(duration),
                     priority=Priority(priority),
+                    scheduled_time=scheduled_time,
                 )
             )
 
@@ -114,8 +136,33 @@ st.divider()
 st.subheader("Build Schedule")
 
 if st.button("Generate schedule"):
-    try:
-        schedule = Scheduler(owner=owner).build_day(date.today())
-        st.text(schedule.explain())
-    except NotImplementedError:
-        st.warning("The scheduler isn't implemented yet. Fill in Scheduler.build_day in pawpal_system.py.")
+    scheduler = Scheduler(owner=owner)
+    pairs = owner.tasks_with_pets()
+
+    if not pairs:
+        st.info("No tasks to schedule yet.")
+    else:
+        # Earliest scheduled time first; tasks with no time go last.
+        sorted_pairs = scheduler.sort_by_time(pairs)
+        st.table(
+            [
+                {
+                    "time": t.scheduled_time.strftime("%H:%M") if t.scheduled_time else "unscheduled",
+                    "pet": p.name,
+                    "task": t.title,
+                    "duration_minutes": t.duration_minutes,
+                    "priority": t.priority.value,
+                    "completed": t.completed,
+                }
+                for p, t in sorted_pairs
+            ]
+        )
+
+        # Tasks that share the exact same scheduled_time, grouped by that time.
+        conflicts = scheduler.detect_conflicts(pairs)
+        if conflicts:
+            for slot, group in conflicts.items():
+                details = ", ".join(f"{p.name}: {t.title}" for p, t in group)
+                st.warning(f"⚠️ Conflict at {slot.strftime('%H:%M')} — {details}")
+        else:
+            st.success("No scheduling conflicts found.")
