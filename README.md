@@ -68,29 +68,40 @@ Tasks are grouped by preferred time of day, and sorted highest priority first
 within each group. Concrete clock times arrive once `Scheduler.build_day` places
 tasks into the owner's available windows.
 
-## 🧪 Testing PawPal+
+## Testing PawPal+
 
 ```bash
 # Run the full test suite:
-pytest
-
-# Run with coverage:
-pytest --cov
+python3 -m pytest
 ```
+
+The tests in `tests/test_pawpal.py` cover:
+
+- **Sorting correctness** -- `Scheduler.sort_by_time()` returns tasks in
+  chronological order, puts unscheduled tasks last, and breaks ties by priority.
+- **Recurring task logic** -- completing a daily task adds a copy due the next
+  day, a weekly task comes back 7 days later, a one-time task does not repeat,
+  and the original task stays completed.
+- **Conflict detection** -- `Scheduler.detect_conflicts()` flags tasks with the
+  same `scheduled_time` for the same pet or different pets, and ignores
+  unscheduled tasks.
+- **Edge cases** -- a pet with no tasks, a day with no conflicts, and three
+  tasks at the exact same time.
 
 Sample test output:
 
 ```
-$ python -m pytest
-============================= test session starts ==============================
-platform darwin -- Python 3.13.1, pytest-9.1.1, pluggy-1.6.0
-rootdir: .../ai110-module2show-pawpal-starter
-collected 2 items
-
-tests/test_pawpal.py ..                                                  [100%]
-
-============================== 2 passed in 0.01s ===============================
+$ python3 -m pytest -q
+...............                                                          [100%]
+15 passed in 0.03s
 ```
+
+**Confidence Level:** ⭐⭐⭐⭐☆ (4/5)
+
+The tests cover the main implemented behaviors and several edge cases. One
+star is held back because conflict detection only checks exact matching start
+times, not overlapping task durations (e.g. a 30-minute walk at 8:00 and a
+feeding at 8:15 are not flagged yet).
 
 ## 📐 Smarter Scheduling
 
