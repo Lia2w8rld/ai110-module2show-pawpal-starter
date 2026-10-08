@@ -4,8 +4,8 @@ Skeleton generated from diagrams/uml.mmd. Attributes and method signatures
 only -- the scheduling logic is implemented in later steps.
 """
 
-from dataclasses import dataclass, field
-from datetime import date, time
+from dataclasses import dataclass, field, replace
+from datetime import date, time, timedelta
 from enum import Enum
 
 
@@ -28,6 +28,14 @@ class TimeOfDay(Enum):
     AFTERNOON = "afternoon"
     EVENING = "evening"
     ANY = "any"
+
+
+class Frequency(Enum):
+    """How often a care task repeats once it is completed."""
+
+    ONCE = "once"
+    DAILY = "daily"
+    WEEKLY = "weekly"
 
 
 @dataclass
@@ -77,11 +85,27 @@ class CareTask(CareItem):
     """A flexible task: walk, feeding, water, meds, enrichment."""
 
     preferred_time: TimeOfDay = TimeOfDay.ANY
-    recurring_daily: bool = True
+    frequency: Frequency = Frequency.DAILY
+    scheduled_time: time | None = None
+    due_date: date | None = None
 
     def is_fixed(self) -> bool:
         """False -- the scheduler is free to move a care task around the day."""
         return False
+
+    def next_occurrence(self, today: date | None = None) -> "CareTask | None":
+        """A fresh, not-yet-done copy of this task for its next due date.
+
+        Daily tasks come back tomorrow, weekly tasks in 7 days, and one-time
+        tasks return None. `today` defaults to date.today().
+        """
+        if self.frequency is Frequency.ONCE:
+            return None
+        if today is None:
+            today = date.today()
+        days = 1 if self.frequency is Frequency.DAILY else 7
+        # replace() copies every other field (title, priority, times...).
+        return replace(self, completed=False, due_date=today + timedelta(days=days))
 
     def fits_in(self, window: TimeWindow) -> bool:
         """True if this task could be placed somewhere in `window`."""
@@ -121,6 +145,18 @@ class Pet:
         """Attach a fixed-time appointment to this pet."""
         self.appointments.append(appointment)
 
+    def complete_task(self, task: CareTask, today: date | None = None) -> CareTask | None:
+        """Mark `task` done and, if it repeats, add its next occurrence.
+
+        The finished task stays in the list as history. Returns the new task,
+        or None for a one-time task.
+        """
+        task.mark_complete()
+        next_task = task.next_occurrence(today)
+        if next_task is not None:
+            self.add_task(next_task)
+        return next_task
+
     def items(self) -> list[CareItem]:
         """All tasks and appointments for this pet, in one list."""
         return [*self.tasks, *self.appointments]
@@ -141,6 +177,10 @@ class Owner:
     def all_items(self) -> list[CareItem]:
         """Every care item across every pet this owner has."""
         return [item for pet in self.pets for item in pet.items()]
+
+    def tasks_with_pets(self) -> list[tuple[Pet, CareTask]]:
+        """Every care task paired with the pet it belongs to."""
+        return [(pet, task) for pet in self.pets for task in pet.tasks]
 
     def total_available_minutes(self) -> int:
         """Sum of all available windows, the hard cap on what can be scheduled."""
@@ -213,3 +253,54 @@ class Scheduler:
     def next_free_slot(self, duration_minutes: int, window: TimeWindow) -> time | None:
         """Earliest unused start time in `window` that fits, or None."""
         raise NotImplementedError
+
+    def sort_by_time(
+        self, pairs: list[tuple[Pet, CareTask]] | None = None
+    ) -> list[tuple[Pet, CareTask]]:
+        """Tasks ordered by scheduled_time, earliest first; unscheduled tasks last.
+
+        Ties are broken by priority, most important first. Returns a new list.
+        """
+        if pairs is None:
+            pairs = self.owner.tasks_with_pets()
+        # Tuples compare left to right: False (has a time) sorts before True
+        # (no time), then by clock time, then by priority rank.
+        return sorted(
+            pairs,
+            key=lambda pair: (
+                pair[1].scheduled_time is None,
+                pair[1].scheduled_time or time.min,
+                pair[1].priority.rank(),
+            ),
+        )
+
+    def filter_tasks(
+        self, pet_name: str | None = None, completed: bool | None = None
+    ) -> list[tuple[Pet, CareTask]]:
+        """Tasks matching every filter given; a filter left as None is ignored."""
+        return [
+            (pet, task)
+            for pet, task in self.owner.tasks_with_pets()
+            if (pet_name is None or pet.name == pet_name)
+            and (completed is None or task.completed == completed)
+        ]
+
+    def detect_conflicts(
+        self, pairs: list[tuple[Pet, CareTask]] | None = None
+    ) -> dict[time, list[tuple[Pet, CareTask]]]:
+        """Tasks that share the exact same scheduled_time, grouped by that time.
+
+        Covers the same pet or different pets; unscheduled tasks are ignored.
+        Returns an empty dict when nothing clashes -- it never raises.
+        """
+        if pairs is None:
+            pairs = self.owner.tasks_with_pets()
+        # Group every timed task under its clock time.
+        by_time: dict[time, list[tuple[Pet, CareTask]]] = {}
+        for pet, task in pairs:
+            if task.scheduled_time is not None:
+                by_time.setdefault(task.scheduled_time, []).append((pet, task))
+        # A time with more than one task on it is a conflict.
+        return {
+            slot: group for slot, group in sorted(by_time.items()) if len(group) > 1
+        }

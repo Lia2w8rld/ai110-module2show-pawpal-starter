@@ -57,9 +57,12 @@ Scheduler	The only class that makes decisions. Places appointments first (they c
 **b. Tradeoffs**
 
 - Describe one tradeoff your scheduler makes.
-    my scheduler makes  trades off with place_tasks() it walks task in priority order and drop each in the first slot that fits. and preference yields to priority. 
 - Why is that tradeoff reasonable for this scenario?
-    it's reasonable because it allows you to prioritize a handful of pet tasks.
+    One tradeoff my scheduler makes is that place_tasks() walks through tasks in priority order and puts each task in the first slot that fits. This means preference can yield to priority. For example, a lower-priority task might have a preferred time, but if a higher-priority task needs that time, the higher-priority task gets placed first.
+
+    This is reasonable for PawPal+ because some pet care tasks are more important than others. Feeding, medication, and other high-priority tasks should be scheduled before lower-priority tasks when time is limited.
+
+    Another tradeoff I made with conflict detection is that it only checks for tasks with the exact same scheduled time. For example, if two tasks are both scheduled for 8:00, the scheduler flags them as a conflict. However, if one task starts at 8:00 and lasts 30 minutes while another starts at 8:15, it will not detect that they overlap. Detecting duration overlaps would be more realistic, but it would also make the algorithm more complicated. For this version of PawPal+, I chose the simpler exact-time check because it catches obvious double-bookings while keeping the code easier to understand.
 
 ---
 
@@ -70,10 +73,18 @@ Scheduler	The only class that makes decisions. Places appointments first (they c
 - How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
 - What kinds of prompts or questions were most helpful?
 
+    I used AI throughout the project for design brainstorming, debugging, and thinking through the scheduling logic before implementing it. I also used AI to help me break the project into smaller steps and identify where certain logic should live in the classes. For example, I used AI to think through how Owner, Pet, CareTask, and Scheduler should work together and how sorting, filtering, recurring tasks, and conflict detection could be added without changing the whole system.
+
+    The most helpful prompts were the ones where I gave AI the assignment requirements and asked it to explain the logic before changing my code. Asking it to focus on one step at a time helped me understand what each method was supposed to do instead of just having AI write everything at once.
+
 **b. Judgment and verification**
 
 - Describe one moment where you did not accept an AI suggestion as-is.
 - How did you evaluate or verify what the AI suggested?
+
+    One moment where I did not accept an AI suggestion as-is was when I asked AI to review my detect_conflicts() algorithm and suggest ways to make it simpler. It suggested alternatives such as using an explicit if statement, or groupby. After comparing them, I decided to keep my original setdefault() approach because it was already efficient and clear enough for the size of this project.
+
+    I verified the suggestions by looking at how each version would actually work with my task data and by running my tests and demos. This helped me realize that shorter code is not automatically better code. I wanted my implementation to be something I could explain and debug myself, not just something that looked more advanced.
 
 ---
 
